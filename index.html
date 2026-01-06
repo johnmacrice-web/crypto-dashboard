@@ -172,6 +172,21 @@ function computeRegimeFromCandles(candles) {
         try {
           const r = await fetch(base + "/api/markets");
           if (!r.ok) throw new Error("API error: " + r.status);
+          try {
+  const c = await fetch(base + "/api/candles?product=BTC-USD&granularity=3600");
+  if (c.ok) {
+    const payload = await c.json();
+    const out = computeRegimeFromCandles(payload.candles || []);
+    document.getElementById("regime").textContent = out.label;
+    document.getElementById("regimeDetail").textContent = out.detail;
+  } else {
+    document.getElementById("regime").textContent = "—";
+    document.getElementById("regimeDetail").textContent = "No candle data";
+  }
+} catch (e) {
+  document.getElementById("regime").textContent = "—";
+  document.getElementById("regimeDetail").textContent = "Error loading regime";
+}
           const data = await r.json();
 
           const pill = (val) => {
