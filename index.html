@@ -70,6 +70,11 @@
           <div class="v" id="lastUpdated">—</div>
           <div class="sub muted" id="status">Ready</div>
         </div>
+        <div class="card">
+          <div class="k">Market Regime (BTC)</div>
+          <div class="v" id="regime">—</div>
+          <div class="sub" id="regimeDetail">—</div>
+</div>
       </div>
 
       <div class="tablewrap" style="margin-top:16px;">
@@ -97,6 +102,44 @@
 
       const fmtMoney = (n) =>
         new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+function computeRegimeFromCandles(candles) {
+  // candles rows: [time, low, high, open, close, volume]
+  // Coinbase returns newest-first; we want oldest-first
+  const rows = [...candles].reverse();
+
+  // Use close prices
+  const closes = rows.map(r => Number(r[4])).filter(n => Number.isFinite(n));
+  if (closes.length < 20) return { label: "Not enough data", detail: "" };
+
+  const first = closes[0];
+  const last = closes[closes.length - 1];
+  const pctMove = first ? ((last - first) / first) * 100 : 0;
+
+  // Volatility proxy: average absolute % change between hourly closes
+  let absSum = 0;
+  for (let i = 1; i < closes.length; i++) {
+    const prev = closes[i - 1];
+    const cur = closes[i];
+    if (prev) absSum += Math.abs((cur - prev) / prev) * 100;
+  }
+  const avgAbs = absSum / Math.max(1, closes.length - 1);
+
+  // Simple labels (tweakable)
+  const trend = pctMove >= 0 ? "Uptrend" : "Downtrend";
+  const vol = avgAbs < 0.35 ? "Calm" : avgAbs < 0.8 ? "Normal" : "Wild";
+
+  // Regime heuristic:
+  // Uptrend + calm/normal => Risk-on
+  // Downtrend + normal/wild => Risk-off
+  let label = "Neutral";
+  if (pctMove > 0.5 && (vol === "Calm" || vol === "Normal")) label = "Risk-on";
+  if (pctMove < -0.5 && (vol === "Normal" || vol === "Wild")) label = "Risk-off";
+
+  return {
+    label,
+    detail: `${trend} • Volatility: ${vol} • ~${pctMove.toFixed(2)}% (window)`,
+  };
+}
 
       const fmtCompactMoney = (n) =>
         new Intl.NumberFormat("en-US", {
