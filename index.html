@@ -91,6 +91,28 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
+      <div class="card" style="margin-top:16px;">
+  <div class="top" style="padding:0; margin:0;">
+    <div>
+      <div class="k">My Rules Alerts (local)</div>
+      <div class="sub muted">Runs every refresh. Saved in your browser.</div>
+    </div>
+    <div class="controls">
+      <button id="addRuleBtn">+ Add Rule</button>
+      <button id="runRulesBtn">Run Rules</button>
+    </div>
+  </div>
+
+  <div id="rulesList" style="margin-top:12px;"></div>
+
+  <div style="margin-top:12px;">
+    <div class="k">Triggered</div>
+    <div id="alertsBox" class="sub" style="margin-top:8px;">
+      <span class="muted">No alerts yet.</span>
+    </div>
+  </div>
+</div>
+
 
       <p class="muted" style="margin-top:12px; font-size:12px;">
         Paste your Worker base URL like <span class="pill">https://crypto-api.YOURNAME.workers.dev</span>, click Save.
@@ -101,7 +123,154 @@
       const $ = (id) => document.getElementById(id);
 
       const fmtMoney = (n) =>
-        new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+          new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+      function loadRules() {
+  try { return JSON.parse(localStorage.getItem("RULES") || "[]"); }
+  catch { return []; }
+}
+function saveRules(rules) {
+  localStorage.setItem("RULES", JSON.stringify(rules));
+}
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+function renderRules(rules) {
+  const el = document.getElementById("rulesList");
+  if (!el) return;
+
+  if (!rules.length) {
+    el.innerHTML = `<div class="muted">No rules yet. Click “Add Rule”.</div>`;
+    return;
+  }
+
+  el.innerHTML = rules.map(r => `
+    <div class="card" style="margin:10px 0; padding:12px;">
+      <div class="top" style="padding:0; margin:0;">
+        <div>
+          <div class="v" style="font-size:16px;">${r.name || "Rule"}</div>
+          <div class="sub muted">${r.type}</div>
+        </div>
+        <div class="controls">
+          <button data-del="${r.id}">Delete</button>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+        <span class="pill">Coin: <strong>${r.coin}</strong></span>
+        ${r.type === "price_1h"
+          ? `<span class="pill">Threshold: <strong>${r.thresholdPct}%</strong></span>`
+          : `<span class="pill">Spike: <strong>${r.multiplier}×</strong></span>`
+        }
+      </div>
+    </div>
+  `).join("");
+
+  // wire delete
+  el.querySelectorAll("[data-del]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.getAttribute("data-del");
+      const next = loadRules().filter(x => x.id !== id);
+      saveRules(next);
+      renderRules(next);
+    };
+  });
+}
+async function runRules(base) {
+  const rules = loadRules();
+  const alerts = [];
+
+  // helper: get 1h candles for a product
+  async function getHourly(product) {
+    const r = await fetch(base + `/api/candles?product=${encodeURIComponent(product)}&granularity=3600`);
+    if (!r.ok) throw new Error("candles " + product);
+    const payload = await r.json();
+    // newest-first: [time, low, high, open, close, volume]
+    return payload.candles || [];
+  }
+
+  for (const rule of rules) {
+    const product = `${rule.coin.toUpperCase()}-USD`;
+
+    try {
+      const candles = await getHourly(product);
+
+      if (rule.type === "price_1h") {
+        // Need last 2 closes to compute 1h return
+        if (candles.length < 2) continue;
+        const lastClose = Number(candles[0][4]);
+        const prevClose = Number(candles[1][4]);
+        if (!prevClose) continue;
+        const pct = ((lastClose - prevClose) / prevClose) * 100;
+
+        if (Math.abs(pct) >= Number(rule.thresholdPct)) {
+          alerts.push({
+            ruleId: rule.id,
+            msg: `${rule.coin.toUpperCase()} moved ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% in ~1h (≥ ${rule.thresholdPct}%)`
+          });
+        }
+      }
+
+      if (rule.type === "vol_spike") {
+        // Compare latest hour volume vs avg of previous 24 hours
+        if (candles.length < 26) continue;
+        const latestVol = Number(candles[0][5]);
+        const vols = candles.slice(1, 25).map(c => Number(c[5])).filter(n => Number.isFinite(n));
+        const avg = vols.reduce((a,b)=>a+b,0) / Math.max(1, vols.length);
+        const mult = avg ? latestVol / avg : 0;
+
+        if (mult >= Number(rule.multiplier)) {
+          alerts.push({
+            ruleId: rule.id,
+            msg: `${rule.coin.toUpperCase()} volume spike: ${mult.toFixed(2)}× vs 24h avg (≥ ${rule.multiplier}×)`
+          });
+        }
+      }
+
+    } catch (e) {
+      // ignore per-coin errors
+    }
+  }
+
+  // render alerts
+  const box = document.getElementById("alertsBox");
+  if (box) {
+    if (!alerts.length) {
+      box.innerHTML = `<span class="muted">No alerts triggered.</span>`;
+    } else {
+      box.innerHTML = alerts.map(a => `<div style="margin:6px 0;">✅ ${a.msg}</div>`).join("");
+    }
+  }
+}
+// Alerts wiring
+const addBtn = document.getElementById("addRuleBtn");
+const runBtn = document.getElementById("runRulesBtn");
+
+function addDefaultRule() {
+  const rules = loadRules();
+  // alternate rule types each time so you get both quickly
+  const nextType = rules.length % 2 === 0 ? "price_1h" : "vol_spike";
+  const rule = nextType === "price_1h"
+    ? { id: uid(), type: "price_1h", name: "1h Move Alert", coin: "BTC", thresholdPct: 3 }
+    : { id: uid(), type: "vol_spike", name: "Volume Spike Alert", coin: "SOL", multiplier: 2 };
+
+  rules.push(rule);
+  saveRules(rules);
+  renderRules(rules);
+}
+
+if (addBtn) addBtn.onclick = addDefaultRule;
+
+if (runBtn) {
+  runBtn.onclick = async () => {
+    const base = getBaseUrl();
+    if (!base) return;
+    await runRules(base);
+  };
+}
+
+// initial render
+renderRules(loadRules());
+
 function computeRegimeFromCandles(candles) {
   // candles rows: [time, low, high, open, close, volume]
   // Coinbase returns newest-first; we want oldest-first
@@ -225,7 +394,7 @@ function computeRegimeFromCandles(candles) {
             `;
             tbody.appendChild(row);
           });
-
+          await runRules(base);
           $("lastUpdated").textContent = new Date().toLocaleTimeString();
           setStatus("Live ✅");
         } catch (e) {
