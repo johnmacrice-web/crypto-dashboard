@@ -34,6 +34,21 @@
       .pos { color: #48e29a; border-color:#1b5a43; }
       .neg { color: #ff6b7a; border-color:#6a1f2b; }
       .muted { opacity: .75; }
+
+      /* ⭐ star button styling */
+      .starBtn{
+        background:transparent;
+        border:1px solid #2a3558;
+        color:#e9ecf1;
+        border-radius:10px;
+        padding:4px 8px;
+        cursor:pointer;
+        line-height: 1;
+      }
+      .starBtn[aria-pressed="true"]{
+        border-color:#ffd36a;
+      }
+
       @media (max-width: 900px){ .grid{grid-template-columns: repeat(2, minmax(0, 1fr));} }
     </style>
   </head>
@@ -41,23 +56,23 @@
   <body>
     <div class="wrap">
       <div class="card" style="margin-bottom:16px;">
-  <div class="top" style="padding:0; margin:0;">
-    <div>
-      <div class="k">Account</div>
-      <div class="sub muted" id="authStatus">Not signed in</div>
-    </div>
-    <div class="controls">
-      <button id="logoutBtn" style="display:none;">Log out</button>
-    </div>
-  </div>
+        <div class="top" style="padding:0; margin:0;">
+          <div>
+            <div class="k">Account</div>
+            <div class="sub muted" id="authStatus">Not signed in</div>
+          </div>
+          <div class="controls">
+            <button id="logoutBtn" style="display:none;">Log out</button>
+          </div>
+        </div>
 
-  <div id="authForm" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-    <input id="emailInput" type="email" placeholder="email" />
-    <input id="pwInput" type="password" placeholder="password" />
-    <button id="signupBtn">Sign up</button>
-    <button id="loginBtn">Log in</button>
-  </div>
-</div>
+        <div id="authForm" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <input id="emailInput" type="email" placeholder="email" />
+          <input id="pwInput" type="password" placeholder="password" />
+          <button id="signupBtn">Sign up</button>
+          <button id="loginBtn">Log in</button>
+        </div>
+      </div>
 
       <div class="top">
         <h1>Crypto Dashboard</h1>
@@ -93,7 +108,7 @@
           <div class="k">Market Regime (BTC)</div>
           <div class="v" id="regime">—</div>
           <div class="sub" id="regimeDetail">—</div>
-</div>
+        </div>
       </div>
 
       <div class="tablewrap" style="margin-top:16px;">
@@ -111,28 +126,28 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
+
       <div class="card" style="margin-top:16px;">
-  <div class="top" style="padding:0; margin:0;">
-    <div>
-      <div class="k">My Rules Alerts (local)</div>
-      <div class="sub muted">Runs every refresh. Saved in your browser.</div>
-    </div>
-    <div class="controls">
-      <button id="addRuleBtn">+ Add Rule</button>
-      <button id="runRulesBtn">Run Rules</button>
-    </div>
-  </div>
+        <div class="top" style="padding:0; margin:0;">
+          <div>
+            <div class="k">My Rules Alerts (local)</div>
+            <div class="sub muted">Runs every refresh. Saved in your browser.</div>
+          </div>
+          <div class="controls">
+            <button id="addRuleBtn">+ Add Rule</button>
+            <button id="runRulesBtn">Run Rules</button>
+          </div>
+        </div>
 
-  <div id="rulesList" style="margin-top:12px;"></div>
+        <div id="rulesList" style="margin-top:12px;"></div>
 
-  <div style="margin-top:12px;">
-    <div class="k">Triggered</div>
-    <div id="alertsBox" class="sub" style="margin-top:8px;">
-      <span class="muted">No alerts yet.</span>
-    </div>
-  </div>
-</div>
-
+        <div style="margin-top:12px;">
+          <div class="k">Triggered</div>
+          <div id="alertsBox" class="sub" style="margin-top:8px;">
+            <span class="muted">No alerts yet.</span>
+          </div>
+        </div>
+      </div>
 
       <p class="muted" style="margin-top:12px; font-size:12px;">
         Paste your Worker base URL like <span class="pill">https://crypto-api.YOURNAME.workers.dev</span>, click Save.
@@ -142,269 +157,78 @@
     <script type="module">
       import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL = "https://ateqypvwpzosexidgphb.supabase.co";
-const SUPABASE_KEY = "sb_publishable_GMMxKGKIwToUezoMQssr2Q_enZAlvZt";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-let myAssets = new Set(); // holds symbols like "btc", "eth"
-
-async function getUser() {
-  const { data } = await supabase.auth.getUser();
-  return data.user || null;
-}
-
-async function loadMyAssets() {
-  const user = await getUser();
-  if (!user) {
-    myAssets = new Set();
-    return;
-  }
-  const { data, error } = await supabase
-    .from("assets")
-    .select("symbol")
-    .eq("user_id", user.id);
-
-  if (error) {
-    console.warn("loadMyAssets error:", error.message);
-    myAssets = new Set();
-    return;
-  }
-  myAssets = new Set((data || []).map(r => (r.symbol || "").toLowerCase()));
-}
-
-async function toggleAsset(symbol, type = "crypto") {
-  const user = await getUser();
-  if (!user) {
-    alert("Please log in first.");
-    return;
-  }
-  const sym = symbol.toLowerCase();
-
-  if (myAssets.has(sym)) {
-    // delete
-    const { error } = await supabase
-      .from("assets")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("symbol", sym)
-      .eq("type", type);
-
-    if (error) return alert(error.message);
-    myAssets.delete(sym);
-  } else {
-    // insert
-    const { error } = await supabase.from("assets").insert({
-      user_id: user.id,
-      symbol: sym,
-      type,
-    });
-
-    if (error) return alert(error.message);
-    myAssets.add(sym);
-  }
-
-  // re-render table stars without a full reload
-  renderStars();
-}
-
-function renderStars() {
-  document.querySelectorAll("[data-star]").forEach(btn => {
-    const sym = btn.getAttribute("data-star");
-    const on = myAssets.has(sym);
-    btn.textContent = on ? "★" : "☆";
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-  });
-}
+      const SUPABASE_URL = "https://ateqypvwpzosexidgphb.supabase.co";
+      const SUPABASE_KEY = "sb_publishable_GMMxKGKIwToUezoMQssr2Q_enZAlvZt";
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const $ = (id) => document.getElementById(id);
 
+      // ---------- Watchlist (Supabase assets table) ----------
+      let myAssets = new Set(); // symbols like "btc", "eth"
+
+      async function getUser() {
+        const { data } = await supabase.auth.getUser();
+        return data.user || null;
+      }
+
+      async function loadMyAssets() {
+        const user = await getUser();
+        if (!user) { myAssets = new Set(); return; }
+
+        const { data, error } = await supabase
+          .from("assets")
+          .select("symbol")
+          .eq("user_id", user.id);
+
+        if (error) {
+          console.warn("loadMyAssets error:", error.message);
+          myAssets = new Set();
+          return;
+        }
+        myAssets = new Set((data || []).map(r => (r.symbol || "").toLowerCase()));
+      }
+
+      function renderStars() {
+        document.querySelectorAll("[data-star]").forEach(btn => {
+          const sym = btn.getAttribute("data-star");
+          const on = myAssets.has(sym);
+          btn.textContent = on ? "★" : "☆";
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+
+      async function toggleAsset(symbol, type = "crypto") {
+        const user = await getUser();
+        if (!user) { alert("Please log in first."); return; }
+        const sym = symbol.toLowerCase();
+
+        if (myAssets.has(sym)) {
+          const { error } = await supabase
+            .from("assets")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("symbol", sym)
+            .eq("type", type);
+
+          if (error) return alert(error.message);
+          myAssets.delete(sym);
+        } else {
+          const { error } = await supabase.from("assets").insert({
+            user_id: user.id,
+            symbol: sym,
+            type,
+          });
+
+          if (error) return alert(error.message);
+          myAssets.add(sym);
+        }
+
+        renderStars();
+      }
+
+      // ---------- Formatters ----------
       const fmtMoney = (n) =>
-          new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-      function loadRules() {
-  try { return JSON.parse(localStorage.getItem("RULES") || "[]"); }
-  catch { return []; }
-}
-function saveRules(rules) {
-  localStorage.setItem("RULES", JSON.stringify(rules));
-}
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
-function renderRules(rules) {
-  const el = document.getElementById("rulesList");
-  if (!el) return;
-
-  if (!rules.length) {
-    el.innerHTML = `<div class="muted">No rules yet. Click “Add Rule”.</div>`;
-    return;
-  }
-
-  el.innerHTML = rules.map(r => `
-    <div class="card" style="margin:10px 0; padding:12px;">
-      <div class="top" style="padding:0; margin:0;">
-        <div>
-          <div class="v" style="font-size:16px;">${r.name || "Rule"}</div>
-          <div class="sub muted">${r.type}</div>
-        </div>
-        <div class="controls">
-          <button data-del="${r.id}">Delete</button>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-        <span class="pill">Coin: <strong>${r.coin}</strong></span>
-        ${r.type === "price_1h"
-          ? `<span class="pill">Threshold: <strong>${r.thresholdPct}%</strong></span>`
-          : `<span class="pill">Spike: <strong>${r.multiplier}×</strong></span>`
-        }
-      </div>
-    </div>
-  `).join("");
-
-  // wire delete
-  el.querySelectorAll("[data-del]").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-del");
-      const next = loadRules().filter(x => x.id !== id);
-      saveRules(next);
-      renderRules(next);
-    };
-  });
-}
-async function runRules(base) {
-  const rules = loadRules();
-  const alerts = [];
-
-  // helper: get 1h candles for a product
-  async function getHourly(product) {
-    const r = await fetch(base + `/api/candles?product=${encodeURIComponent(product)}&granularity=3600`);
-    if (!r.ok) throw new Error("candles " + product);
-    const payload = await r.json();
-    // newest-first: [time, low, high, open, close, volume]
-    return payload.candles || [];
-  }
-
-  for (const rule of rules) {
-    const product = `${rule.coin.toUpperCase()}-USD`;
-
-    try {
-      const candles = await getHourly(product);
-
-      if (rule.type === "price_1h") {
-        // Need last 2 closes to compute 1h return
-        if (candles.length < 2) continue;
-        const lastClose = Number(candles[0][4]);
-        const prevClose = Number(candles[1][4]);
-        if (!prevClose) continue;
-        const pct = ((lastClose - prevClose) / prevClose) * 100;
-
-        if (Math.abs(pct) >= Number(rule.thresholdPct)) {
-          alerts.push({
-            ruleId: rule.id,
-            msg: `${rule.coin.toUpperCase()} moved ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% in ~1h (≥ ${rule.thresholdPct}%)`
-          });
-        }
-      }
-
-      if (rule.type === "vol_spike") {
-        // Compare latest hour volume vs avg of previous 24 hours
-        if (candles.length < 26) continue;
-        const latestVol = Number(candles[0][5]);
-        const vols = candles.slice(1, 25).map(c => Number(c[5])).filter(n => Number.isFinite(n));
-        const avg = vols.reduce((a,b)=>a+b,0) / Math.max(1, vols.length);
-        const mult = avg ? latestVol / avg : 0;
-
-        if (mult >= Number(rule.multiplier)) {
-          alerts.push({
-            ruleId: rule.id,
-            msg: `${rule.coin.toUpperCase()} volume spike: ${mult.toFixed(2)}× vs 24h avg (≥ ${rule.multiplier}×)`
-          });
-        }
-      }
-
-    } catch (e) {
-      // ignore per-coin errors
-    }
-  }
-
-  // render alerts
-  const box = document.getElementById("alertsBox");
-  if (box) {
-    if (!alerts.length) {
-      box.innerHTML = `<span class="muted">No alerts triggered.</span>`;
-    } else {
-      box.innerHTML = alerts.map(a => `<div style="margin:6px 0;">✅ ${a.msg}</div>`).join("");
-    }
-  }
-}
-// Alerts wiring
-const addBtn = document.getElementById("addRuleBtn");
-const runBtn = document.getElementById("runRulesBtn");
-
-function addDefaultRule() {
-  const rules = loadRules();
-  // alternate rule types each time so you get both quickly
-  const nextType = rules.length % 2 === 0 ? "price_1h" : "vol_spike";
-  const rule = nextType === "price_1h"
-    ? { id: uid(), type: "price_1h", name: "1h Move Alert", coin: "BTC", thresholdPct: 3 }
-    : { id: uid(), type: "vol_spike", name: "Volume Spike Alert", coin: "SOL", multiplier: 2 };
-
-  rules.push(rule);
-  saveRules(rules);
-  renderRules(rules);
-}
-
-if (addBtn) addBtn.onclick = addDefaultRule;
-
-if (runBtn) {
-  runBtn.onclick = async () => {
-    const base = getBaseUrl();
-    if (!base) return;
-    await runRules(base);
-  };
-}
-
-// initial render
-renderRules(loadRules());
-
-function computeRegimeFromCandles(candles) {
-  // candles rows: [time, low, high, open, close, volume]
-  // Coinbase returns newest-first; we want oldest-first
-  const rows = [...candles].reverse();
-
-  // Use close prices
-  const closes = rows.map(r => Number(r[4])).filter(n => Number.isFinite(n));
-  if (closes.length < 20) return { label: "Not enough data", detail: "" };
-
-  const first = closes[0];
-  const last = closes[closes.length - 1];
-  const pctMove = first ? ((last - first) / first) * 100 : 0;
-
-  // Volatility proxy: average absolute % change between hourly closes
-  let absSum = 0;
-  for (let i = 1; i < closes.length; i++) {
-    const prev = closes[i - 1];
-    const cur = closes[i];
-    if (prev) absSum += Math.abs((cur - prev) / prev) * 100;
-  }
-  const avgAbs = absSum / Math.max(1, closes.length - 1);
-
-  // Simple labels (tweakable)
-  const trend = pctMove >= 0 ? "Uptrend" : "Downtrend";
-  const vol = avgAbs < 0.35 ? "Calm" : avgAbs < 0.8 ? "Normal" : "Wild";
-
-  // Regime heuristic:
-  // Uptrend + calm/normal => Risk-on
-  // Downtrend + normal/wild => Risk-off
-  let label = "Neutral";
-  if (pctMove > 0.5 && (vol === "Calm" || vol === "Normal")) label = "Risk-on";
-  if (pctMove < -0.5 && (vol === "Normal" || vol === "Wild")) label = "Risk-off";
-
-  return {
-    label,
-    detail: `${trend} • Volatility: ${vol} • ~${pctMove.toFixed(2)}% (window)`,
-  };
-}
+        new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
       const fmtCompactMoney = (n) =>
         new Intl.NumberFormat("en-US", {
@@ -416,42 +240,201 @@ function computeRegimeFromCandles(candles) {
 
       function setStatus(msg) { $("status").textContent = msg; }
 
+      // ---------- Local rules ----------
+      function loadRules() {
+        try { return JSON.parse(localStorage.getItem("RULES") || "[]"); }
+        catch { return []; }
+      }
+      function saveRules(rules) { localStorage.setItem("RULES", JSON.stringify(rules)); }
+      function uid() { return Math.random().toString(36).slice(2, 10); }
+
+      function renderRules(rules) {
+        const el = document.getElementById("rulesList");
+        if (!el) return;
+
+        if (!rules.length) {
+          el.innerHTML = `<div class="muted">No rules yet. Click “Add Rule”.</div>`;
+          return;
+        }
+
+        el.innerHTML = rules.map(r => `
+          <div class="card" style="margin:10px 0; padding:12px;">
+            <div class="top" style="padding:0; margin:0;">
+              <div>
+                <div class="v" style="font-size:16px;">${r.name || "Rule"}</div>
+                <div class="sub muted">${r.type}</div>
+              </div>
+              <div class="controls">
+                <button data-del="${r.id}">Delete</button>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+              <span class="pill">Coin: <strong>${r.coin}</strong></span>
+              ${r.type === "price_1h"
+                ? `<span class="pill">Threshold: <strong>${r.thresholdPct}%</strong></span>`
+                : `<span class="pill">Spike: <strong>${r.multiplier}×</strong></span>`
+              }
+            </div>
+          </div>
+        `).join("");
+
+        el.querySelectorAll("[data-del]").forEach(btn => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-del");
+            const next = loadRules().filter(x => x.id !== id);
+            saveRules(next);
+            renderRules(next);
+          };
+        });
+      }
+
+      async function runRules(base) {
+        const rules = loadRules();
+        const alerts = [];
+
+        async function getHourly(product) {
+          const r = await fetch(base + `/api/candles?product=${encodeURIComponent(product)}&granularity=3600`);
+          if (!r.ok) throw new Error("candles " + product);
+          const payload = await r.json();
+          return payload.candles || [];
+        }
+
+        for (const rule of rules) {
+          const product = `${rule.coin.toUpperCase()}-USD`;
+
+          try {
+            const candles = await getHourly(product);
+
+            if (rule.type === "price_1h") {
+              if (candles.length < 2) continue;
+              const lastClose = Number(candles[0][4]);
+              const prevClose = Number(candles[1][4]);
+              if (!prevClose) continue;
+              const pct = ((lastClose - prevClose) / prevClose) * 100;
+
+              if (Math.abs(pct) >= Number(rule.thresholdPct)) {
+                alerts.push({
+                  ruleId: rule.id,
+                  msg: `${rule.coin.toUpperCase()} moved ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% in ~1h (≥ ${rule.thresholdPct}%)`
+                });
+              }
+            }
+
+            if (rule.type === "vol_spike") {
+              if (candles.length < 26) continue;
+              const latestVol = Number(candles[0][5]);
+              const vols = candles.slice(1, 25).map(c => Number(c[5])).filter(n => Number.isFinite(n));
+              const avg = vols.reduce((a,b)=>a+b,0) / Math.max(1, vols.length);
+              const mult = avg ? latestVol / avg : 0;
+
+              if (mult >= Number(rule.multiplier)) {
+                alerts.push({
+                  ruleId: rule.id,
+                  msg: `${rule.coin.toUpperCase()} volume spike: ${mult.toFixed(2)}× vs 24h avg (≥ ${rule.multiplier}×)`
+                });
+              }
+            }
+          } catch {}
+        }
+
+        const box = document.getElementById("alertsBox");
+        if (box) {
+          if (!alerts.length) box.innerHTML = `<span class="muted">No alerts triggered.</span>`;
+          else box.innerHTML = alerts.map(a => `<div style="margin:6px 0;">✅ ${a.msg}</div>`).join("");
+        }
+      }
+
+      const addBtn = document.getElementById("addRuleBtn");
+      const runBtn = document.getElementById("runRulesBtn");
+
+      function addDefaultRule() {
+        const rules = loadRules();
+        const nextType = rules.length % 2 === 0 ? "price_1h" : "vol_spike";
+        const rule = nextType === "price_1h"
+          ? { id: uid(), type: "price_1h", name: "1h Move Alert", coin: "BTC", thresholdPct: 3 }
+          : { id: uid(), type: "vol_spike", name: "Volume Spike Alert", coin: "SOL", multiplier: 2 };
+
+        rules.push(rule);
+        saveRules(rules);
+        renderRules(rules);
+      }
+
+      if (addBtn) addBtn.onclick = addDefaultRule;
+      if (runBtn) runBtn.onclick = async () => {
+        const base = getBaseUrl();
+        if (!base) return;
+        await runRules(base);
+      };
+
+      renderRules(loadRules());
+
+      function computeRegimeFromCandles(candles) {
+        const rows = [...candles].reverse();
+        const closes = rows.map(r => Number(r[4])).filter(n => Number.isFinite(n));
+        if (closes.length < 20) return { label: "Not enough data", detail: "" };
+
+        const first = closes[0];
+        const last = closes[closes.length - 1];
+        const pctMove = first ? ((last - first) / first) * 100 : 0;
+
+        let absSum = 0;
+        for (let i = 1; i < closes.length; i++) {
+          const prev = closes[i - 1];
+          const cur = closes[i];
+          if (prev) absSum += Math.abs((cur - prev) / prev) * 100;
+        }
+        const avgAbs = absSum / Math.max(1, closes.length - 1);
+
+        const trend = pctMove >= 0 ? "Uptrend" : "Downtrend";
+        const vol = avgAbs < 0.35 ? "Calm" : avgAbs < 0.8 ? "Normal" : "Wild";
+
+        let label = "Neutral";
+        if (pctMove > 0.5 && (vol === "Calm" || vol === "Normal")) label = "Risk-on";
+        if (pctMove < -0.5 && (vol === "Normal" || vol === "Wild")) label = "Risk-off";
+
+        return { label, detail: `${trend} • Volatility: ${vol} • ~${pctMove.toFixed(2)}% (window)` };
+      }
+
+      // ---------- Worker base URL ----------
       function getBaseUrl() {
         return (localStorage.getItem("API_BASE") || "").replace(/\/+$/, "");
       }
-
       function setBaseUrl(v) {
         localStorage.setItem("API_BASE", v.replace(/\/+$/, ""));
       }
 
       async function load() {
         const base = getBaseUrl();
-        if (!base) {
-          setStatus("Paste your Worker URL, click Save.");
-          return;
-        }
+        if (!base) { setStatus("Paste your Worker URL, click Save."); return; }
 
         $("refreshBtn").disabled = true;
         setStatus("Loading…");
 
         try {
+          // Load watchlist for stars first (so renderStars works)
+          await loadMyAssets();
+
           const r = await fetch(base + "/api/markets");
           if (!r.ok) throw new Error("API error: " + r.status);
+
+          // regime
           try {
-  const c = await fetch(base + "/api/candles?product=BTC-USD&granularity=3600");
-  if (c.ok) {
-    const payload = await c.json();
-    const out = computeRegimeFromCandles(payload.candles || []);
-    document.getElementById("regime").textContent = out.label;
-    document.getElementById("regimeDetail").textContent = out.detail;
-  } else {
-    document.getElementById("regime").textContent = "—";
-    document.getElementById("regimeDetail").textContent = "No candle data";
-  }
-} catch (e) {
-  document.getElementById("regime").textContent = "—";
-  document.getElementById("regimeDetail").textContent = "Error loading regime";
-}
+            const c = await fetch(base + "/api/candles?product=BTC-USD&granularity=3600");
+            if (c.ok) {
+              const payload = await c.json();
+              const out = computeRegimeFromCandles(payload.candles || []);
+              $("regime").textContent = out.label;
+              $("regimeDetail").textContent = out.detail;
+            } else {
+              $("regime").textContent = "—";
+              $("regimeDetail").textContent = "No candle data";
+            }
+          } catch {
+            $("regime").textContent = "—";
+            $("regimeDetail").textContent = "Error loading regime";
+          }
+
           const data = await r.json();
 
           const pill = (val) => {
@@ -478,29 +461,34 @@ function computeRegimeFromCandles(candles) {
 
           const tbody = $("rows");
           tbody.innerHTML = "";
+
           data.forEach((x, i) => {
             const c = x.price_change_percentage_24h ?? 0;
             const row = document.createElement("tr");
             row.innerHTML = `
-  <td style="width:36px;">
-    <button class="starBtn" data-star="${x.symbol.toLowerCase()}">
-      ☆
-    </button>
-  </td>
-  <td class="muted">${i + 1}</td>
-  <td>
-    <strong>${x.name}</strong>
-    <span class="muted">(${x.symbol.toUpperCase()})</span>
-  </td>
-  <td>${fmtMoney(x.current_price)}</td>
-  <td>${fmtCompactMoney(x.market_cap || 0)}</td>
-  <td>${pill(c)}</td>
-`;
-
+              <td style="width:36px;">
+                <button class="starBtn" data-star="${x.symbol.toLowerCase()}" aria-pressed="false" title="Save to My Assets">☆</button>
+              </td>
+              <td class="muted">${i + 1}</td>
+              <td>
+                <strong>${x.name}</strong>
+                <span class="muted">(${x.symbol.toUpperCase()})</span>
+              </td>
+              <td>${fmtMoney(x.current_price)}</td>
+              <td>${fmtCompactMoney(x.market_cap || 0)}</td>
+              <td>${pill(c)}</td>
             `;
             tbody.appendChild(row);
           });
+
+          // wire star clicks + paint stars
+          document.querySelectorAll(".starBtn").forEach(btn => {
+            btn.onclick = () => toggleAsset(btn.getAttribute("data-star"), "crypto");
+          });
+          renderStars();
+
           await runRules(base);
+
           $("lastUpdated").textContent = new Date().toLocaleTimeString();
           setStatus("Live ✅");
         } catch (e) {
@@ -522,52 +510,60 @@ function computeRegimeFromCandles(candles) {
       };
 
       $("refreshBtn").onclick = load;
-async function refreshAuthUI() {
-  const { data } = await supabase.auth.getSession();
-  const session = data.session;
 
-  const status = document.getElementById("authStatus");
-  const form = document.getElementById("authForm");
-  const logout = document.getElementById("logoutBtn");
+      // ---------- Auth UI ----------
+      async function refreshAuthUI() {
+        const { data } = await supabase.auth.getSession();
+        const session = data.session;
 
-  if (session?.user) {
-    status.textContent = `Signed in as ${session.user.email}`;
-    form.style.display = "none";
-    logout.style.display = "inline-block";
-  } else {
-    status.textContent = "Not signed in";
-    form.style.display = "flex";
-    logout.style.display = "none";
-  }
-}
+        const status = $("authStatus");
+        const form = $("authForm");
+        const logout = $("logoutBtn");
 
-document.getElementById("signupBtn").onclick = async () => {
-  const email = document.getElementById("emailInput").value.trim();
-  const password = document.getElementById("pwInput").value;
-  const { error } = await supabase.auth.signUp({ email, password });
-  alert(error ? error.message : "Signed up! Now log in.");
-};
+        if (session?.user) {
+          status.textContent = `Signed in as ${session.user.email}`;
+          form.style.display = "none";
+          logout.style.display = "inline-block";
+        } else {
+          status.textContent = "Not signed in";
+          form.style.display = "flex";
+          logout.style.display = "none";
+        }
+      }
 
-document.getElementById("loginBtn").onclick = async () => {
-  const email = document.getElementById("emailInput").value.trim();
-  const password = document.getElementById("pwInput").value;
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  alert(error ? error.message : "Logged in!");
-  await refreshAuthUI();
-};
+      $("signupBtn").onclick = async () => {
+        const email = $("emailInput").value.trim();
+        const password = $("pwInput").value;
+        const { error } = await supabase.auth.signUp({ email, password });
+        alert(error ? error.message : "Signed up! Now log in.");
+      };
 
-document.getElementById("logoutBtn").onclick = async () => {
-  await supabase.auth.signOut();
-  await refreshAuthUI();
-};
+      $("loginBtn").onclick = async () => {
+        const email = $("emailInput").value.trim();
+        const password = $("pwInput").value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        alert(error ? error.message : "Logged in!");
+        await refreshAuthUI();
+        await loadMyAssets();
+        renderStars();
+      };
 
-// Update UI when auth state changes (login/logout in any tab)
-supabase.auth.onAuthStateChange(() => refreshAuthUI());
+      $("logoutBtn").onclick = async () => {
+        await supabase.auth.signOut();
+        await refreshAuthUI();
+        await loadMyAssets();
+        renderStars();
+      };
 
-// run once on page load
-refreshAuthUI();
+      supabase.auth.onAuthStateChange(async () => {
+        await refreshAuthUI();
+        await loadMyAssets();
+        renderStars();
+      });
 
-      // Auto-refresh every 60s (matches Worker cache)
+      await refreshAuthUI();
+
+      // Auto-refresh every 60s
       setInterval(load, 60000);
       load();
     </script>
