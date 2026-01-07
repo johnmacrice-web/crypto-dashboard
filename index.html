@@ -40,6 +40,25 @@
 
   <body>
     <div class="wrap">
+      <div class="card" style="margin-bottom:16px;">
+  <div class="top" style="padding:0; margin:0;">
+    <div>
+      <div class="k">Account</div>
+      <div class="sub muted" id="authStatus">Not signed in</div>
+    </div>
+    <div class="controls">
+      <button id="logoutBtn" style="display:none;">Log out</button>
+    </div>
+  </div>
+
+  <div id="authForm" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+    <input id="emailInput" type="email" placeholder="email" />
+    <input id="pwInput" type="password" placeholder="password" />
+    <button id="signupBtn">Sign up</button>
+    <button id="loginBtn">Log in</button>
+  </div>
+</div>
+
       <div class="top">
         <h1>Crypto Dashboard</h1>
         <div class="controls">
@@ -119,7 +138,14 @@
       </p>
     </div>
 
-    <script>
+    <script type="module">
+      import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://ateqypvwpzosexidgphb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_GMMxKGKIwToUezoMQssr2Q_enZAlvZt";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
       const $ = (id) => document.getElementById(id);
 
       const fmtMoney = (n) =>
@@ -416,6 +442,50 @@ function computeRegimeFromCandles(candles) {
       };
 
       $("refreshBtn").onclick = load;
+async function refreshAuthUI() {
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+
+  const status = document.getElementById("authStatus");
+  const form = document.getElementById("authForm");
+  const logout = document.getElementById("logoutBtn");
+
+  if (session?.user) {
+    status.textContent = `Signed in as ${session.user.email}`;
+    form.style.display = "none";
+    logout.style.display = "inline-block";
+  } else {
+    status.textContent = "Not signed in";
+    form.style.display = "flex";
+    logout.style.display = "none";
+  }
+}
+
+document.getElementById("signupBtn").onclick = async () => {
+  const email = document.getElementById("emailInput").value.trim();
+  const password = document.getElementById("pwInput").value;
+  const { error } = await supabase.auth.signUp({ email, password });
+  alert(error ? error.message : "Signed up! Now log in.");
+};
+
+document.getElementById("loginBtn").onclick = async () => {
+  const email = document.getElementById("emailInput").value.trim();
+  const password = document.getElementById("pwInput").value;
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  alert(error ? error.message : "Logged in!");
+  await refreshAuthUI();
+};
+
+document.getElementById("logoutBtn").onclick = async () => {
+  await supabase.auth.signOut();
+  await refreshAuthUI();
+};
+
+// Update UI when auth state changes (login/logout in any tab)
+supabase.auth.onAuthStateChange(() => refreshAuthUI());
+
+// run once on page load
+refreshAuthUI();
 
       // Auto-refresh every 60s (matches Worker cache)
       setInterval(load, 60000);
